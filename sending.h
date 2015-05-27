@@ -8,7 +8,7 @@
 
 #define CUST_NAME_MAX 100 /*Length of the name*/
 #define CUST_MAX_HC_PERIOD 60 /* In sec i.e 1 min */
-#define DEFAULT_MAX_QUEUE_SIZE 10 /*Maximum size of the queue*/
+#define DEFAULT_MAX_QUEUE_SIZE 100 /*Maximum size of the queue*/
 
 unsigned long max_queue_size = DEFAULT_MAX_QUEUE_SIZE;
 
@@ -24,10 +24,16 @@ struct customer {
 
 typedef struct customer customer;
 unsigned long cur_queue_len = 0;
+int data_found = 0;
+int glob_awake = 0;
+int flag=0;
+int data,y;
 customer *queue_tail = NULL;
 customer* queue_head = NULL;
 pthread_mutex_t mutex;
 pthread_mutex_t waiting_queue_lock;
+pthread_mutex_t count_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t count_threshold_cv = PTHREAD_COND_INITIALIZER;
 
 /*To free the space if some error with the initialization
 Input:
@@ -58,8 +64,8 @@ Input:
 Output:
         void
 */
-void
-barber(customer *cust);
+void*
+barber(void *unused);
 
 /*
 Input:
@@ -71,8 +77,8 @@ int
 add_customer_to_queue (customer *cust);
 
 /*To get the customer details from the queue*/
-void *
-fetch_customer_from_queue (void * unused);
+customer*
+fetch_customer_from_queue();
 
 /*To generate the randon string
 Input:
@@ -82,3 +88,7 @@ Output:
 */
 char*
 randstring(size_t length);
+
+void*
+service(void * unused);
+

@@ -52,7 +52,6 @@ void *
 customer_thread (void * unused)
 {
 
-        printf("Custthread\n");
         customer *cust = NULL;
         int ret               = -1;
         char customer_name[CUST_NAME_MAX];
@@ -66,16 +65,15 @@ customer_thread (void * unused)
         cust = init_customer (customer_name, hc_period);
         if (!cust) 
         {
-                fprintf (stderr, "Failed creating customer");
+                fprintf (stderr, "Failed creating customer\n");
                 goto out;
         }
-printf("Adding\n");
         ret = add_customer_to_queue (cust);
         if (ret)
         {
                 /* This is the customer trashing case */
                 fprintf (stderr, 
-                "Failed adding customer to the waiting queue");
+                "Failed adding customer to the waiting queue\n");
         }
 out :
          return NULL;
@@ -113,7 +111,6 @@ randstring(size_t length)
 int
 add_customer_to_queue (customer *cust)
 {
-        printf("Entring add\n");
         int ret = -1;
         assert (cust);
 
@@ -127,6 +124,7 @@ add_customer_to_queue (customer *cust)
 
         if (cur_queue_len == max_queue_size)
         {
+		printf ("Customer : %s is getting trashed! :(\n", cust->name);
                 goto unlock; 
         }
       /* queue is empty */
@@ -134,7 +132,12 @@ add_customer_to_queue (customer *cust)
         {
                 queue_tail = cust;
                 queue_head = cust;
+
+		/* Before changing the value of a globle variable take a lock*/
+		pthread_mutex_lock (&data_found_lock);
                 data_found = 1;
+		pthread_mutex_unlock (&data_found_lock);
+
         }
         else
         {
@@ -146,7 +149,7 @@ add_customer_to_queue (customer *cust)
       /* aal izz well :) */
         cur_queue_len++;
         ret = 0;
-        printf("The name is %s",cust->name);
+	printf ("Customer : %s in the waiting queue! :) \n", cust->name);
 
 unlock:
 
@@ -166,7 +169,6 @@ out:
 customer*
 fetch_customer_from_queue ()
 {
-        printf("Entrng fetch\n");
         int ret = -1;
         customer *cust = NULL;
 
@@ -189,7 +191,13 @@ fetch_customer_from_queue ()
         {
                 cust = queue_head;
                 queue_tail = queue_head = NULL;
+ 
+
+                /* Before changing the value of a globle variable take a lock*/
+                pthread_mutex_lock (&data_found_lock);
                 data_found = 0;
+                pthread_mutex_unlock (&data_found_lock);
+
         }
         else
         {
@@ -197,7 +205,6 @@ fetch_customer_from_queue ()
                queue_head = queue_head->prev;
                cust->prev = NULL;
         }
-        printf("In fetch %s",cust->name);
 
         /* aal izz well */
         cur_queue_len--;
@@ -221,17 +228,28 @@ out:
 void*
 service(void *unused)
 {
-        while(1)
-        {
+       int data_found_flag = 0;
+       while(1)
+        {       
+		
                 pthread_mutex_lock(&count_mutex);
-                while(glob_awake==0&&data_found==1)
+
+                /* Before reading the value of a globle variable take a lock*/
+                pthread_mutex_lock (&data_found_lock);
+                data_found_flag = data_found;
+                pthread_mutex_unlock (&data_found_lock);
+
+
+                /* If data is available in the queue and barber is sleeping signal the barber thread */
+                if (data_found_flag == 1 && glob_awake == 0)
                 {
-                        glob_awake=1;
-                        printf("Signal\n");
                         pthread_cond_signal(&count_threshold_cv);
+
                 }
+
                 pthread_mutex_unlock(&count_mutex);
-        }
+ 
+       }
 }
 
 void*
@@ -239,49 +257,52 @@ barber(void *unused)
 {
 
         customer *cust;
-        pthread_t fid;
         while(1)
         {
                 pthread_mutex_lock(&count_mutex);
-                while(glob_awake==0)
-                {
-                printf("Sleeping\n");
+                printf("Barber is Sleeping\n");
+		glob_awake = 0;
                 pthread_cond_wait(&count_threshold_cv,&count_mutex);
-                }
-                cust=fetch_customer_from_queue();
-                printf("Signld\n");
-                if(cust!=NULL)
-                printf("The barber now wakes up nd starts the hair cut of %s \n",cust->name);
-                else
-                {
-                        glob_awake=0;
-                        break;
-                }
+                printf("Barber is waked !!\n");
+
+		// Indicate working
+                glob_awake = 1;
+
+                cust = fetch_customer_from_queue();
+                
+                if (cust!=NULL) {
+
+               		printf("Barber is working on %s for %ld secs \n",cust->name, cust->hc_time);
+			sleep (cust->hc_time);               
+                } else {
+
+		       printf ("NULL Customer!");	    
+
+		}
                 pthread_mutex_unlock(&count_mutex);
         }
 
 }
 
-main()
+int main()
 {
 
         int i;
-        pthread_t id0;
-        pthread_t id1;
-        pthread_t id2[100];
-        pthread_create(&id0,NULL,&barber,NULL);
-        pthread_create(&id1,NULL,&service,NULL);
+        pthread_t barber_thread;
+        pthread_t service_thread;
+        pthread_t customer_threads[11];
 
-        for (i=0; i<3; i++ )
+        pthread_create(&barber_thread, NULL, &barber,NULL);
+        pthread_create(&service_thread, NULL, &service,NULL);
+
+        for (i=0; i<10; i++ )
         {
-                pthread_create(&id2[i],NULL,&customer_thread,NULL);
+                pthread_create (&customer_threads[i], NULL, &customer_thread, NULL);
         }
-        for (i=0; i<3; i++ )
-        {
-                pthread_join(id2[i],NULL);
-        }
-        printf("break time\n");
-        pthread_join(id1,NULL);
-        pthread_join(id0,NULL);
+
+        pthread_join(barber_thread,NULL);
+        pthread_join(service_thread,NULL);
+
+        return 0;
 
 }

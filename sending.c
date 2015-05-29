@@ -125,6 +125,7 @@ add_customer_to_queue (customer *cust)
         if (cur_queue_len == max_queue_size)
         {
 		printf ("Customer : %s is getting trashed! :(\n", cust->name);
+		ret = -1;
                 goto unlock; 
         }
       /* queue is empty */
@@ -183,6 +184,7 @@ fetch_customer_from_queue ()
         /* if queue is empty */
         if (cur_queue_len == 0)
         {
+		ret = -1;
                 goto unlock;
         }
 

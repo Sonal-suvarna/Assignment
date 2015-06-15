@@ -1,47 +1,4 @@
-#include <stdio.h>
-#include <stdbool.h>
-#include <malloc.h>
-#include <stdlib.h>
-#define MAXFIELD 18
-
-#ifndef ORDER
-#define ORDER 3
-#endif
-
-int order=ORDER;
-static int no_of_entries;
-
-typedef struct field {
-        unsigned long value;
-}field;
-
-typedef struct bucket {
-        unsigned long *key;
-        void **bpointer;
-        struct bucket *parent;
-        struct bucket *next;
-        int key_counter;
-        bool is_leaf;
-}bucket;
-
-bool verbose_output = false;
-
-unsigned long rmalloc (int amount);
-bucket * find_leaf( bucket * root, unsigned long key, bool verbose );
-field * key_exists( bucket * root, unsigned long key, bool verbose);
-int cut( int length );
-field * make_field(unsigned long key);
-bucket * make_bucket( void );
-bucket * make_leaf( void );
-int get_left_index(bucket * parent, bucket * left);
-bucket * insert_into_leaf( bucket * leaf, unsigned long key, field * pointer );
-bucket * insert_into_leaf_after_splitting(bucket * root, bucket * leaf, unsigned long key, field * pointer);
-bucket * insert_into_node(bucket * root, bucket * n, int left_index, unsigned long key, bucket * right);
-bucket * insert_into_node_after_splitting(bucket * root, bucket * old_node, int left_index, unsigned long key, bucket * right);
-bucket * insert_into_parent(bucket * root, bucket * left, unsigned long key, bucket * right);
-bucket * insert_into_new_root(bucket * left, unsigned long key, bucket * right);
-bucket * insert( bucket * root, int key );
-
+#include "b+tree.h"
 
 unsigned long rmalloc (int amount) {
 
@@ -50,349 +7,320 @@ unsigned long rmalloc (int amount) {
         return (unsigned long)rptr;
 }
 
-bucket * find_leaf( bucket * root, unsigned long key, bool verbose ) {
-        int i = 0;
-        bucket * c = root;
-        if (c == NULL) {
-                if (verbose) 
-                        printf("Tree is empty\n");
-                return c;
-        }
-        while (!c->is_leaf) {
-                if (verbose) {
-                        printf("[");
-                        for (i = 0; i < c->key_counter - 1; i++)
-                                printf("%d ", c->key[i]);
-                        printf("%d] ", c->key[i]);
-                }
-                i = 0;
-                while (i < c->key_counter) {
-                        if (key >= c->key[i]) i++;
-                        else break;
-                }
-                if (verbose)
-                        printf("%d ->\n", i);
-                c = (bucket *)c->bpointer[i];
-        }
-        if (verbose) {
-                printf("Leaf [");
-                for (i = 0; i < c->key_counter - 1; i++)
-                        printf("%d ", c->key[i]);
-                printf("%d] ->\n", c->key[i]);
-        }
-        return c;
-}
+field * make_field (unsigned long key) {
 
-
-field * key_exists( bucket * root, unsigned long key, bool verbose) {
-
-        int i = 0;
-        bucket * c = find_leaf( root, key, verbose);
-        if (c == NULL) return NULL;
-        for (i = 0; i < c->key_counter; i++)
-                if (c->key[i] == key) break;
-        if (i == c->key_counter) 
-                return NULL;
-        else
-                return (field *)c->bpointer[i];
-
-}
-
-int cut( int length ) {
-
-        if (length % 2 == 0)
-                return length/2;
-        else
-                return length/2 + 1;
-
-}
-
-field * make_field(unsigned long key) {
-
-        field * field_ptr;
-        field_ptr = (field *) malloc (sizeof(field));
-        if(field_ptr == NULL)
-        {
-                printf("Couldnt allocate memory\n");
+        field * field_pointer;
+        field_pointer = (field *) malloc (sizeof(field));
+        if(field_pointer == NULL) {
+                printf("Memory not loiallocated\n");
                 exit(0);
         }
         else {
-                field_ptr->value = key;
+                field_pointer->value = key;
         }
-        return field_ptr;
+        return field_pointer;
 
 }
 
-bucket * make_bucket( void ) {
+bucket * make_bucket () {
 
-        bucket * bucket_ptr;
-        bucket_ptr = (bucket *) malloc(sizeof(bucket));
-        if (bucket_ptr == NULL) {
-                printf("Couldnt create memory\n");
+        bucket * bucket_pointer;
+        bucket_pointer = (bucket *) malloc (sizeof(bucket));
+        if(bucket_pointer == NULL) {
+                printf("Memory not allocated\n");
                 exit(0);
         }
-        bucket_ptr->key = (unsigned long *) malloc( (order - 1) * sizeof(unsigned long) );
-        if (bucket_ptr->key == NULL) {
-                printf("Couldnt create memory\n");
+        bucket_pointer->key = (unsigned long * ) malloc ( (order -1) *
+                sizeof(unsigned long));
+        if(bucket_pointer->key == NULL) {
+                printf("Memory not allocated\n");
                 exit(0);
         }
-        bucket_ptr->bpointer = malloc( order * sizeof(void *) );
-        if (bucket_ptr->bpointer == NULL) {
-                printf("Couldnt create memory\n");
+        bucket_pointer->b_pointer = malloc (order * sizeof(void *));
+        if(bucket_pointer->b_pointer == NULL) {
+                printf("Memory not allocated\n");
                 exit(0);
         }
-        bucket_ptr->is_leaf = false;
-        bucket_ptr->key_counter = 0;
-        bucket_ptr->parent = NULL;
-        bucket_ptr->next = NULL;
-        return bucket_ptr;
+        bucket_pointer->is_leaf = NULL;
+        bucket_pointer->parent = NULL;
+        bucket_pointer->key_counter = 0;
+        return bucket_pointer;
 
 }
 
-bucket * make_leaf( void ) {
+bucket * make_leaf() {
 
         bucket * leaf = make_bucket();
         leaf->is_leaf = true;
         return leaf;
-
 }
 
-int get_left_index(bucket * parent, bucket * left) {
+int div_point (int size) {
+        if(size%2 == 0) {
+                return size/2;
+        }
+                else {
+                        return (size/2 + 1);
+                }
+}
+bucket * search_leaf (bucket * root , unsigned long key , bool verbose) {
 
-        int left_index = 0;
-        while (left_index <= parent->key_counter && 
-                        parent->bpointer[left_index] != left)
-                left_index++;
-        return left_index;
+        int i = 0;
+        bucket * p = root;
+        if(p == NULL) {
+                if(verbose)
+                printf("The tree dosnt exists\n");
+                return p;
+        }
+        while(!p->is_leaf) {
+                while(i<p->key_counter) {
+                        if(key >= p->key[i]) i++;
+                        else break;
+                }
+                p = (bucket *)p->b_pointer[i];
+        }
+        return p;
 }
 
-bucket * insert_into_leaf( bucket * leaf, unsigned long key, field * pointer ) {
+field * key_exists (bucket * root , unsigned long key , bool verbose) {
 
-        int i, insertion_point;
-        insertion_point = 0;
-        while (insertion_point < leaf->key_counter && leaf->key[insertion_point] < key)
-                insertion_point++;
-
-        for (i = leaf->key_counter; i > insertion_point; i--) {
-                leaf->key[i] = leaf->key[i - 1];
-                leaf->bpointer[i] = leaf->bpointer[i - 1];
-        }
-        leaf->key[insertion_point] = key;
-        leaf->bpointer[insertion_point] = pointer;
-        leaf->key_counter++;
-        return leaf;
-}
-
-bucket * insert_into_leaf_after_splitting(bucket * root, bucket * leaf, unsigned long key, field * pointer) {
-
-        bucket * new_leaf;
-        unsigned long * temp_keys;
-        void ** temp_pointers;
-        int insertion_index, split, new_key, i, j;
-        new_leaf = make_leaf();
-        temp_keys = (unsigned long *)malloc( order * sizeof(unsigned long) );
-        if (temp_keys == NULL) {
-                printf("No space\n");
-                exit(0);
-        }
-        temp_pointers = malloc( order * sizeof(void *) );
-        if (temp_pointers == NULL) {
-                printf("No space\n");
-                exit(0);
-        }
-        insertion_index = 0;
-        while (insertion_index < order - 1 && leaf->key[insertion_index] < key)
-                insertion_index++;
-        for (i = 0, j = 0; i < leaf->key_counter; i++, j++) {
-                if (j == insertion_index) j++;
-                temp_keys[j] = leaf->key[i];
-                temp_pointers[j] = leaf->bpointer[i];
-        }
-        temp_keys[insertion_index] = key;
-        temp_pointers[insertion_index] = pointer;
-        leaf->key_counter = 0;
-        split = cut(order - 1);
-        for (i = 0; i < split; i++) {
-                leaf->bpointer[i] = temp_pointers[i];
-                leaf->key[i] = temp_keys[i];
-                leaf->key_counter++;
-        }
-        for (i = split, j = 0; i < order; i++, j++) {
-                new_leaf->bpointer[j] = temp_pointers[i];
-                new_leaf->key[j] = temp_keys[i];
-                new_leaf->key_counter++;
-        }
-        free(temp_pointers);
-        free(temp_keys);
-        new_leaf->bpointer[order - 1] = leaf->bpointer[order - 1];
-        leaf->bpointer[order - 1] = new_leaf;
-
-        for (i = leaf->key_counter; i < order - 1; i++)
-                leaf->bpointer[i] = NULL;
-        for (i = new_leaf->key_counter; i < order - 1; i++)
-                new_leaf->bpointer[i] = NULL;
-        new_leaf->parent = leaf->parent;
-        new_key = new_leaf->key[0];
-        return insert_into_parent(root, leaf, new_key, new_leaf);
-        //return tempo;
-
-}
-
-bucket * insert_into_node(bucket * root, bucket * n, 
-                int left_index, unsigned long key, bucket * right) {
         int i;
-        for (i = n->key_counter; i > left_index; i--) {
-                n->bpointer[i + 1] = n->bpointer[i];
-                n->key[i] = n->key[i - 1];
+        bucket * ptr = search_leaf(root , key , false);
+        if(ptr == NULL) {
+                return NULL;
         }
-        n->bpointer[left_index + 1] = right;
-        n->key[left_index] = key;
-        n->key_counter++;
-        return root;
-}
-
-bucket * insert_into_node_after_splitting(bucket * root, bucket * old_node, int left_index, 
-                unsigned long key, bucket * right) {
-
-        int i, j, split, k_prime;
-        bucket * new_node, * child;
-        unsigned long * temp_keys;
-        bucket ** temp_pointers;
-
-        /* First create a temporary set of keys and pointers
-        * to hold everything in order, including
-        * the new key and pointer, inserted in their
-        * correct places. 
-        * Then create a new node and copy half of the 
-        * keys and pointers to the old node and
-        * the other half to the new.
-        */
-
-        temp_pointers = malloc( (order + 1) * sizeof(bucket *) );
-        if (temp_pointers == NULL) {
-        printf("No space\n");
-        exit(0);
-        }
-        temp_keys = malloc( order * sizeof(unsigned long) );
-        if (temp_keys == NULL) {
-        printf("No space\n");
-        exit(0);
-        }
-        for (i = 0, j = 0; i < old_node->key_counter + 1; i++, j++) {
-                if (j == left_index + 1) j++;
-                temp_pointers[j] = old_node->bpointer[i];
-        }
-
-        for (i = 0, j = 0; i < old_node->key_counter; i++, j++) {
-                if (j == left_index) j++;
-                temp_keys[j] = old_node->key[i];
-        }
-
-        temp_pointers[left_index + 1] = right;
-        temp_keys[left_index] = key;
-
-        /* Create the new node and copy
-        * half the keys and pointers to the
-        * old and half to the new.
-        */  
-        split = cut(order);
-        new_node = make_bucket();
-        old_node->key_counter = 0;
-        for (i = 0; i < split - 1; i++) {
-                old_node->bpointer[i] = temp_pointers[i];
-                old_node->key[i] = temp_keys[i];
-                old_node->key_counter++;
-        }
-        old_node->bpointer[i] = temp_pointers[i];
-        k_prime = temp_keys[split - 1];
-        for (++i, j = 0; i < order; i++, j++) {
-                new_node->bpointer[j] = temp_pointers[i];
-                new_node->key[j] = temp_keys[i];
-                new_node->key_counter++;
-        }
-        new_node->bpointer[j] = temp_pointers[i];
-        free(temp_pointers);
-        free(temp_keys);
-        new_node->parent = old_node->parent;
-        for (i = 0; i <= new_node->key_counter; i++) {
-                child = new_node->bpointer[i];
-                child->parent = new_node;
-        }
-
-        /* Insert a new key into the parent of the two
-        * nodes resulting from the split, with
-        * the old node to the left and the new to the right.
-        */
-
-        return insert_into_parent(root, old_node, k_prime, new_node);
-}
-
-bucket * insert_into_parent(bucket * root, bucket * left, unsigned long key, bucket * right) {
-
-        int left_index;
-        bucket * parent;
-        parent = left->parent;
-        /* Case: new root. */
-        if (parent == NULL)
-                return insert_into_new_root(left, key, right);
-        /* Case: leaf or node. (Remainder of
-        * function body.)  
-        */
-        /* Find the parent's pointer to the left 
-        * node.
-        */
-        left_index = get_left_index(parent, left);
-        /* Simple case: the new key fits into the node. 
-        */
-        if (parent->key_counter < order - 1)
-                return insert_into_node(root, parent, left_index, key, right);
-        /* Harder case:  split a node in order 
-        * to preserve the B+ tree properties.
-        */
-        return insert_into_node_after_splitting(root, parent, left_index, key, right);
+        for(i=0 ; i<ptr->key_counter ; i++)
+                if(ptr->key[i] == key) break;
+        if(i == ptr->key_counter)
+                return NULL;
+        else
+                return (field *)ptr->b_pointer[i];
 
 }
 
-bucket * insert_into_new_root(bucket * left, unsigned long key, bucket * right) {
-
-        bucket * root = make_bucket();
-        root->key[0] = key;
-        root->bpointer[0] = left;
-        root->bpointer[1] = right;
-        root->key_counter++;
-        root->parent = NULL;
-        left->parent = root;
-        right->parent = root;
-        return root;
-}
-
-bucket * start_new_tree(unsigned long key, field * pointer) {
+bucket * create_new_tree(unsigned long key , field * pointer) {
 
         bucket * root = make_leaf();
         root->key[0] = key;
-        root->bpointer[0] = pointer;
-        root->bpointer[order - 1] = NULL;
+        root->b_pointer[0] = pointer;
         root->parent = NULL;
+        root->b_pointer[order - 1] = NULL;
         root->key_counter++;
         return root;
 
 }
 
-bucket * insert( bucket * root, int key ) {
+bucket * insert_to_leaf (bucket * leaf, unsigned long key , field *
+        pointer) {
 
-        field * pointer;
+                int insertion_point = 0, i;
+                while(insertion_point < leaf->key_counter &&
+                        leaf->key[insertion_point] < key)
+                                insertion_point++;
+                for(i=leaf->key_counter ; i>insertion_point ; i--) {
+                        leaf->key[i] = leaf->key[i-1];
+                        leaf->b_pointer[i] = leaf->b_pointer[i-1];
+                }
+                leaf->key[insertion_point] = key;
+                leaf->b_pointer[insertion_point] = pointer;
+                leaf->key_counter++;
+                return leaf;
+
+        }
+
+bucket * insert_to_leaf_after_split (bucket * root , unsigned long key ,
+                bucket * leaf ,field * pointer) {
+
+                        bucket * new_leaf;
+                        unsigned long * temp_key;
+                        void ** temp_pointer;
+                        int insert_index, split_point, new_key, i, j;
+                        new_leaf = make_leaf();
+                        temp_key = malloc (order*sizeof(unsigned long));
+                        if(temp_key == NULL) {
+                                printf("Memory not allocated\n");
+                                exit(0);
+                        }
+                        temp_pointer = malloc (order * sizeof(void *));
+                        if(temp_pointer == NULL) {
+                                printf("Memory not allocated\n");
+                                exit(0);
+                        }
+                        insert_index = 0;
+                        while(insert_index < order-1 &&
+                                leaf->key[insert_index] < key)
+                                insert_index++;
+                        for(i=0,j=0 ; i<leaf->key_counter ; i++,j++) {
+                                if(j == insert_index) j++;
+                                temp_key[j] = leaf->key[i];
+                                temp_pointer[j] = leaf->b_pointer[i];
+                        }
+                        temp_key[insert_index] = key;
+                        temp_pointer[insert_index] = pointer;
+                        leaf->key_counter = 0;
+                        split_point = div_point (order-1);
+                        for(i=0 ; i<split_point ; i++) {
+                                leaf->b_pointer[i] = temp_pointer[i];
+                                leaf->key[i] = temp_key[i];
+                                leaf->key_counter++;
+                        }
+                        for(i=split_point,j=0 ; i<order ; i++,j++) {
+                                new_leaf->b_pointer[j] = temp_pointer[i];
+                                new_leaf->key[j] = temp_key[i];
+                                new_leaf->key_counter++;
+                        }
+                                free(temp_key);
+                                free(temp_pointer);
+                        new_leaf->b_pointer[order-1] =
+                                        leaf->b_pointer[order-1];
+                        leaf->b_pointer[order-1] = new_leaf;
+                        for(i=leaf->key_counter ; i<order-1 ; i++)
+                                leaf->b_pointer[i] = NULL;
+                        for(i=new_leaf->key_counter ; i<order-1 ; i++)
+                                new_leaf->b_pointer[i] = NULL;
+                        new_leaf->parent = leaf->parent;
+                        new_key = new_leaf->key[0];
+                        return insert_to_parent(root,new_key,leaf,
+                                new_leaf);
+
+}
+
+bucket * make_new_root(unsigned long key , bucket * left ,
+                bucket * right) {
+
+                        bucket * root = make_bucket();
+                        root->key[0] = key;
+                        root->b_pointer[0] = left;
+                        root->b_pointer[1] = right;
+                        root->key_counter++;
+                        root->parent = NULL;
+                        left->parent = root;
+                        right->parent = root;
+                        return root;
+
+                }
+
+int get_left_position(bucket * parent , bucket * left) {
+
+        int index = 0;
+        while(index <= parent->key_counter &&
+                parent->b_pointer[index]!= left) {
+                        index++;
+                }
+                return index;
+
+}
+
+bucket * insert_to_node (bucket * root , bucket * p ,
+                unsigned long key , int index , bucket * right) {
+
+                        int i;
+                        for(i=p->key_counter ; i>index ; i--) {
+                                p->b_pointer[i+1] = p->b_pointer[i];
+                                p->key[i] = p->key[i-1];
+                        }
+                        p->b_pointer[index+1] = right;
+                        p->key[index] = key;
+                        p->key_counter++;
+                        return root;
+
+                }
+
+bucket * insert_to_split_node (bucket * root , bucket * old_parent ,
+                unsigned long key , int index , bucket * right) {
+
+                        int split_point,i,j,value;
+                        unsigned long * temp_keyn;
+                        bucket ** temp_pointern;
+                        bucket *child, *new_node;
+                        temp_keyn = malloc (order * sizeof(unsigned long));
+                        if(temp_keyn == NULL) {
+                                printf("Memory not allocated\n");
+                                exit(0);
+                        }
+                        temp_pointern = malloc ((order+1) *
+                                        sizeof(bucket *));
+                        if(temp_pointern == NULL) {
+                                printf("Memory not allocated\n");
+                                exit(0);
+                        }
+                        for(i=0,j=0 ; i< old_parent->key_counter + 1 ;
+                                i++,j++) {
+                                        if(j == index+1) j++;
+                                        temp_pointern[j] =
+                                             old_parent->b_pointer[i];
+                                }
+                        for(i=0,j=0 ; i< old_parent->key_counter ;
+                                i++,j++) {
+                                        if(j == index) j++;
+                                        temp_keyn[j] = old_parent->key[i];
+                                }
+                        temp_pointern[index+1] = right;
+                        temp_keyn[index]=key;
+                        split_point = div_point (order);
+                        new_node = make_bucket();
+                        old_parent->key_counter = 0;
+                        for(i=0 ; i<split_point-1 ; i++) {
+                                old_parent->key[i] = temp_keyn[i];
+                                old_parent->b_pointer[i] = temp_pointern[i];
+                                old_parent->key_counter++;
+                        }
+                        old_parent->b_pointer[i] = temp_pointern[i];
+                        value = temp_keyn[split_point-1];
+                        for(++i,j=0 ; i<order ; i++,j++) {
+                                new_node->key[j] = temp_keyn[i];
+                                new_node->b_pointer[j] = temp_pointern[i];
+                                new_node->key_counter++;
+                        }
+                        new_node->b_pointer[j] = temp_pointern[i];
+                                free(temp_keyn);
+                                free(temp_pointern);
+                        new_node->parent = old_parent->parent;
+                        for(i=0 ; i<= new_node->key_counter ; i++) {
+                                child = new_node->b_pointer[i];
+                                child->parent = new_node;
+                        }
+                        return insert_to_parent (root,key,old_parent,
+                                        child);
+}
+
+bucket * insert_to_parent (bucket * root , unsigned long key , bucket *
+                left , bucket * right) {
+
+                        bucket * parent;
+                        parent = left->parent;
+                        int left_index;
+                        if(parent == NULL) {
+                                return make_new_root(key,left,right);
+                        }
+                        left_index = get_left_position(parent , left);
+                        if(parent->key_counter < order-1) {
+                                return insert_to_node(root,parent,key,
+                                        left_index,right);
+                        }
+                        return insert_to_split_node(root,parent,key,
+                                        left_index,right);
+}
+
+bucket * master_insert (bucket * root , unsigned long key) {
+
         bucket * leaf;
-        if (key_exists(root, key, false) != NULL)
-        return root;
-        pointer = make_field(key);
-        if (root == NULL)
-        return start_new_tree(key, pointer);
-        leaf = find_leaf(root, key, false);
-        if (leaf->key_counter < order - 1) {
-                leaf = insert_into_leaf(leaf, key, pointer);
+        field * pointer;
+/*Find if the key is  already present*/
+        if(key_exists (root , key , false) != NULL) {
                 return root;
         }
-        return insert_into_leaf_after_splitting(root, leaf, key, pointer);
+        pointer = make_field (key);
+/*Checking if root is NULL*/
+        if(root == NULL) {
+                return create_new_tree (key , pointer);
+        }
+        leaf = search_leaf (root , key , false);
+        if(leaf->key_counter < order-1) {
+                leaf = insert_to_leaf (leaf , key , pointer);
+                return root;
+        }
+        return insert_to_leaf_after_split (root , key , leaf , pointer);
 
 }
 
@@ -403,7 +331,6 @@ int main()
         int choice,amount;
         bucket *root;
         root = NULL;
-        verbose_output = false;
         unsigned long ptr;
         while(1) {
                         if(root == NULL)
@@ -425,10 +352,11 @@ int main()
                                 printf("Tree is already full\n");
                                 exit(0);
                         }
-                        root = insert(root, ptr);
+                        root = master_insert(root, ptr);
                         if(root != NULL)
                         no_of_entries++;
                         printf("\nInsertion of %d element is successful\n",no_of_entries);
+                        //print_tree(root);
                         break;
                 case 2: 
                         printf("\nNot yet implemented\n");

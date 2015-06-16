@@ -61,4 +61,12 @@ bucket * insert_to_split_node (bucket * root , bucket * old_parent ,
 bucket * insert_to_parent (bucket * root , unsigned long key , bucket *
                 left , bucket * right);
                 
-bucket * master_insert (bucket * root , unsigned long key);
+bucket * master_insert (bucket * root , unsigned long key , unsigned long val);
+
+void enqueue( bucket * new_node );
+
+bucket * dequeue( void );
+
+int path( bucket * root, bucket * child );
+
+void print_tree( bucket * root );
